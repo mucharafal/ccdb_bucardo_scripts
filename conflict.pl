@@ -56,7 +56,7 @@ if ($info->{tablename} eq "ccdb_paths") {
         }
     }
 
-    my @conflicts = keys $info->{conflicts};
+    my @conflicts = keys(%{$info->{conflicts}});
     my $dbh_offline = $info->{dbh}->{ccdb_offline};
     my $dbh_online = $info->{dbh}->{ccdb_online};
     my %to_update = ();
