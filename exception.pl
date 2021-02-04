@@ -41,8 +41,8 @@ if ($info->{tablename} eq 'ccdb_paths') {
     my $dbh_offline = $info->{dbh}->{ccdb_offline};
     my $dbh_online = $info->{dbh}->{ccdb_online};
 
-    my @ConflictsIDsFromMain = keys $info -> {deltabin} -> {ccdb_online};
-    my @ConflictsIDsFromStandby = keys $info -> {deltabin} -> {ccdb_offline};
+    my @ConflictsIDsFromMain = keys %{$info -> {deltabin} -> {ccdb_online}};
+    my @ConflictsIDsFromStandby = keys %{$info -> {deltabin} -> {ccdb_offline}};
 
     my %ConflictsPathsFromMain = map { ReceiveValue($_, $dbh_online) => $_ } @ConflictsIDsFromMain;
     my %ConflictsPathsFromStandby = map { ReceiveValue($_, $dbh_offline) => $_ } @ConflictsIDsFromStandby;
