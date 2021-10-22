@@ -1,0 +1,42 @@
+- hosts: ccdb_offline
+  tasks:
+  - name: "Turn off bucardo"
+    shell: /home/postgres/bucardo/bucardo pause all && sleep 10
+  tags: test 
+
+- hosts: ccdb_offline
+  tasks:
+  - name: "Insert rows to db"
+    shell: |
+      psql -h localhost -p 5433 -c "
+      insert into ccdb_paths values (100, 'x');
+      insert into ccdb_paths values (102, 'y');
+      " ccdb postgres
+  tags: test 
+
+- hosts: ccdb_online
+  tasks:
+  - name: "Insert rows to db - exceptions"
+    shell: |
+      /usr/local/pgsql/bin/psql -h localhost -p 5433 -c "
+      insert into ccdb_paths values (100, 'x');
+      insert into ccdb_paths values (103, 'y');
+      " ccdb postgres
+  tags: test 
+
+- hosts: ccdb_offline
+  tasks:
+  - name: "Turn on bucardo"
+    shell: /home/postgres/bucardo/bucardo resume all && sleep 10
+  - name: "Check bucardo status"
+    shell: /home/postgres/bucardo/bucardo status | grep -q Good
+  tags: test 
+
+- hosts: all
+  tasks:
+  - name: "Clean up after test"
+    shell: |
+      /usr/local/pgsql/bin/psql -h localhost -p 5433 -c "
+        delete from ccdb_paths where path = 'x' or path = 'y';
+      " ccdb postgres
+  tags: cleanup 

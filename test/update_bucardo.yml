@@ -1,0 +1,21 @@
+- hosts: alic3
+  vars: 
+    username: postgres
+    user_home: "/home/{{ username }}"
+  tasks:
+  - name: Update repository
+    remote_user: "{{ username }}"
+    shell: "cd {{user_home}}/ccdb_bucardo_scripts && git pull"
+  - name: Update customcode
+    remote_user: "{{ username }}"
+    environment:
+      PERL5LIB: "{{user_home}}/bucardo:{{user_home}}/bucardo/share/perl/5.30.0:{{user_home}}/ccdb_bucardo_scripts"
+    shell: "
+      {{user_home}}/bucardo/bucardo update customcode exception src_code={{user_home}}/ccdb_bucardo_scripts/exception.pl &&
+      {{user_home}}/bucardo/bucardo update customcode conflict src_code={{user_home}}/ccdb_bucardo_scripts/conflict.pl 
+      # && {{user_home}}/bucardo/bucardo delete customcode trigger # src_code={{user_home}}/ccdb_bucardo_scripts/after_sync.pl getdbh=1 # whenrun=after_trigger_enable sync=sync_online_and_offline"
+  - name: Reload bucardo
+    remote_user: root
+    environment:
+      PERL5LIB: "{{user_home}}/bucardo:{{user_home}}/bucardo/share/perl/5.30.0:{{user_home}}/ccdb_bucardo_scripts"
+    shell: systemctl restart bucardo

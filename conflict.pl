@@ -2,76 +2,123 @@ use strict;
 use warnings;
 use Data::Dumper;
 use Set::Scalar;
+use DBUtils;
 
 my $info = shift;
 my $file = '/tmp/conflict.txt';
+my $dbh_offline = $info->{dbh}->{ccdb_offline};
+my $dbh_online = $info->{dbh}->{ccdb_online};
+my @conflicts = keys(%{$info->{conflicts}});
+
+
+$info->{message} = '';
 
 if ($info->{tablename} eq "ccdb_paths") {
-    sub ReceiveValue {
+    my $ReceiveValueHandle = sub {
         my ($id, $dbh) = @_;
-        my $SQL = "select path from ccdb_paths where pathid = ?;";
-        my $sth = $dbh->prepare($SQL);
-        $sth->execute( $id );
-        while ( my @row = $sth->fetchrow_array ) {
-            return $row[0];
-        }
-    }
+        return DBUtils::ReceiveValueFromDatabase($id, $dbh, "ccdb_paths", "pathid", "path");
+    };
 
-    sub ReceiveCCDBRowsToUpdate {
-        my ($id, $dbh) = @_;
-        my $SQL = "select id from ccdb where pathid = ?";
-        my $sth = $dbh->prepare($SQL);
-        $sth->execute( $id );
-        return $sth->fetchall_arrayref;
-    }
-
-    sub GetIdOrInsert {
+    my sub GetIdOrInsert {
         my ($path, $dbh) = @_;
-        my $InsertSQL = "insert into ccdb_paths(path) values (?);";
-        my $GetSQL = "select pathid from ccdb_paths where path = ?;";
-        my $sth = $dbh->prepare($GetSQL);
-        $sth->execute( $path );
-        while ( my @IdRow = $sth->fetchrow_array ) {
-            return $IdRow[0];
-        }
-        $sth = $dbh->prepare($InsertSQL);
-        $sth->execute( $path );
-        my $sth = $dbh->prepare($GetSQL);
-        $sth->execute( $path );
-        while ( my @id = $sth->fetchrow_array ) {
-            return $id[0];
-        }
+        return DBUtils::GetIdOrInsertToDatabase($path, $dbh, "ccdb_paths", "path", "pathid")
     }
 
-    sub UpdatePathId {
-        my ($IdRowsToUpdateRaw, $NewPathId, $dbh) = @_;
-        if (scalar @$IdRowsToUpdateRaw > 0) {
-            my @IdRowsToUpdate = ();
-            foreach my $array (@$IdRowsToUpdateRaw) {
-                push @IdRowsToUpdate, (${$array}[0]);
-            }
-            my $Ids = join("','", @IdRowsToUpdate);
-            my $UpdateSQL = "update ccdb set pathid = $NewPathId where id in (\'$Ids\');";
-            $dbh->do($UpdateSQL);
+    my sub UpdatePathId {
+        my ($NewPathId, $ConflictedPath, $dbh) = @_;
+        my $UpdateSQL = "update ccdb_paths set pathid = $NewPathId where path = \'$ConflictedPath\'";
+        $dbh->do($UpdateSQL);
+    }
+    
+    foreach my $id (@conflicts){
+        my $PathFromOffline = $ReceiveValueHandle->($id, $dbh_offline);
+        my $PathFromOnline = $ReceiveValueHandle->($id, $dbh_online);
+        if($PathFromOffline ne $PathFromOnline) {
+            $info->{message} .= "Resolve conflict for path: $PathFromOffline";
+            my $NewPathId = GetIdOrInsert($PathFromOffline, $dbh_online);
+            UpdatePathId($NewPathId, $PathFromOffline, $dbh_offline);
         }
     }
-
-    my @conflicts = keys $info->{conflicts};
-    my $dbh_offline = $info->{dbh}->{ccdb_offline};
-    my $dbh_online = $info->{dbh}->{ccdb_online};
-    my %to_update = ();
-    foreach my $i (@conflicts){
-        my $Path = ReceiveValue($i, $dbh_offline);
-        my $ValuesToUpdateForPath = ReceiveCCDBRowsToUpdate($i, $dbh_offline);
-        $to_update{$Path} = $ValuesToUpdateForPath;
-    }
-    foreach my $path (keys %to_update) {
-        my $NewPathId = GetIdOrInsert($path, $dbh_online);
-        UpdatePathId($to_update{$path}, $NewPathId, $dbh_offline);
-    }
-    my $GetSQL = "select * from ccdb_paths;";
-    my $sth = $dbh_offline->prepare($GetSQL);
-    $sth->execute();
+    
+    $info->{tablewinner} = 'ccdb_online';
+    my $conflictsAsString = join(",", @conflicts);
+    $info->{message} .= "Conflict on ccdb_paths table: $conflictsAsString";
+    
+    $dbh_offline->do("select ccdb_paths_updated()");
 }
-$info->{tablewinner} = 'ccdb_online';
+
+if ($info->{tablename} eq "ccdb_contenttype") {
+    
+    my $ReceiveValueHandle = sub {
+        my ($id, $dbh) = @_;
+        return DBUtils::ReceiveValueFromDatabase($id, $dbh, "ccdb_contenttype", "contenttypeid", "contenttype");
+    };
+
+    my sub GetIdOrInsert {
+        my ($ContentType, $dbh) = @_;
+        return DBUtils::GetIdOrInsertToDatabase($ContentType, $dbh, "ccdb_contenttype", "contenttype", "contenttypeid")
+    }
+
+    my sub UpdateContentTypeId {
+        my ($NewContentTypeId, $OldContentTypeId, $dbh) = @_;
+        my $UpdateSQL = "update ccdb set contenttype = $NewContentTypeId where contenttype = $OldContentTypeId";
+        $dbh->do($UpdateSQL);
+        my $UpdateSQL = "update ccdb_contenttype set contenttypeid = $NewContentTypeId where contenttypeid = $OldContentTypeId";
+        $dbh->do($UpdateSQL);
+    }
+    
+    foreach my $id (@conflicts){
+        my $ContentTypeFromOffline = $ReceiveValueHandle->($id, $dbh_offline);
+        my $ContentTypeFromOnline = $ReceiveValueHandle->($id, $dbh_online);
+        if($ContentTypeFromOffline ne $ContentTypeFromOnline) {
+            my $NewContentTypeId = GetIdOrInsert($ContentTypeFromOffline, $dbh_online);
+            UpdateContentTypeId($NewContentTypeId, $id, $dbh_offline);
+        }
+    }
+    $info->{tablewinner} = 'ccdb_online';
+    my $conflictsAsString = join(",", @conflicts);
+    $info->{message} .= "Conflict on ccdb_contenttype table: $conflictsAsString\n";
+}
+
+if ($info->{tablename} eq "ccdb_metadata") {
+    my $ReceiveValueHandle = sub {
+        my ($id, $dbh) = @_;
+        return DBUtils::ReceiveValueFromDatabase($id, $dbh, "ccdb_metadata", "metadataid", "metadatakey");
+    };
+
+    my sub GetIdOrInsert {
+        my ($ContentType, $dbh) = @_;
+        return DBUtils::GetIdOrInsertToDatabase($ContentType, $dbh, "ccdb_metadata", "metadatakey", "metadataid")
+    }
+
+    my sub UpdateMetadataId {
+        my ($NewMetadataId, $OldMetadataId, $ConflictedContentType, $dbh) = @_;
+        my $UpdateSQL = "update ccdb set metadata = delete(metadata || hstore('$NewMetadataId', metadata->'$OldMetadataId'), '$OldMetadataId') where exist(metadata, '$OldMetadataId')";
+        $dbh->do($UpdateSQL);
+        my $UpdateSQL = "update ccdb_metadata set metadataid = $NewMetadataId where metadataid = $OldMetadataId";
+        $dbh->do($UpdateSQL);
+    }
+    
+    foreach my $id (@conflicts){
+        my $ContentTypeFromOffline = $ReceiveValueHandle->($id, $dbh_offline);
+        my $ContentTypeFromOnline = $ReceiveValueHandle->($id, $dbh_online);
+        if($ContentTypeFromOffline ne $ContentTypeFromOnline) {
+            my $NewContentTypeId = GetIdOrInsert($ContentTypeFromOffline, $dbh_online);
+            UpdateMetadataId($NewContentTypeId, $id, $ContentTypeFromOffline, $dbh_offline);
+        }
+    }
+
+    $info->{tablewinner} = 'ccdb_offline';
+    my @conflicts = keys(%{$info->{conflicts}});
+    my $conflictsAsString = join(",", @conflicts);
+    $info->{message} = "Conflict on ccdb_metadata table: $conflictsAsString";
+}
+
+if ($info->{tablename} eq "ccdb") {    
+    $info->{tablewinner} = 'ccdb_offline';
+    my @conflicts = keys(%{$info->{conflicts}});
+    my $conflictsAsString = join(",", @conflicts);
+    $info->{message} = "Conflict on ccdb table: $conflictsAsString";
+}
+
 return;

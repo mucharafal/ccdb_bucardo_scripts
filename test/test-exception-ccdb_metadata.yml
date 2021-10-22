@@ -1,0 +1,54 @@
+- hosts: ccdb_offline
+  gather_facts: no
+  tasks:
+  - name: "Turn off bucardo"
+    shell: /home/postgres/bucardo/bucardo pause all && sleep 10
+  tags: test 
+
+- hosts: ccdb_offline
+  gather_facts: no
+  tasks:
+  - name: "Insert rows to db"
+    shell: |
+      psql -h localhost -p 5433 -c "
+      insert into ccdb_paths values (100, 'x');
+      insert into ccdb_contenttype values (100, 'x');
+      insert into ccdb_metadata values (100, 'x');
+      insert into ccdb values ('a3fe6ab0-82a0-11eb-8f02-08f1eaf0250c', 100, '[1970-01-02 20:26:40,1970-01-02 20:36:40)', 1615491202269, '{1}', 100000, '7e8fbee4-f76f-7079-ec87-bdc83d7d5538', 'filename', 100, '127.0.0.1', 160000000, '100 => \"y\"', 160000001);
+      " ccdb postgres
+  tags: test 
+
+- hosts: ccdb_online
+  gather_facts: no
+  tasks:
+  - name: "Insert rows to db - exceptions"
+    shell: |
+      /usr/local/pgsql/bin/psql -h localhost -p 5433 -c "
+      insert into ccdb_paths values (101, 'y');
+      insert into ccdb_contenttype values (101, 'y');
+      insert into ccdb_metadata values (101, 'x');
+      insert into ccdb values ('a3fe6ab0-82a0-11eb-8f02-08f1eaf0250d', 101, '[1970-01-02 20:26:40,1970-01-02 20:36:40)', 1615491202269, '{1}', 100000, '7e8fbee4-f76f-7079-ec87-bdc83d7d5538', 'filename', 101, '127.0.0.1', 160000000, '101 => \"y\"', 160000001);
+      " ccdb postgres
+  tags: test 
+
+- hosts: ccdb_offline
+  gather_facts: no
+  tasks:
+  - name: "Turn on bucardo"
+    shell: /home/postgres/bucardo/bucardo resume all && sleep 10
+  - name: "Check bucardo status"
+    shell: /home/postgres/bucardo/bucardo status | grep -q Good
+  tags: test 
+
+- hosts: all
+  gather_facts: no
+  tasks:
+  - name: "Clean up after test"
+    shell: |
+      /usr/local/pgsql/bin/psql -h localhost -p 5433 -c "
+        delete from ccdb where pathid < 1000 and pathid > 10;
+        delete from ccdb_paths where path = 'x' or path = 'y';
+        delete from ccdb_metadata where metadataKey = 'x' or metadataKey = 'y';
+        delete from ccdb_contenttype where contentType = 'x' or contentType = 'y';
+      " ccdb postgres
+  tags: cleanup 

@@ -1,0 +1,1 @@
+git push && sleep 1 && ./ans update_bucardo.yml

@@ -1,0 +1,55 @@
+- hosts: ccdb_offline
+  gather_facts: no
+  tasks:
+  - name: "Turn off bucardo"
+    shell: /home/postgres/bucardo/bucardo pause all && sleep 10
+  tags: test 
+
+- hosts: ccdb_offline
+  gather_facts: no
+  tasks:
+  - name: "Insert rows to db"
+    shell: |
+      psql -h localhost -p 5433 -c "
+      insert into ccdb_paths values (100, 'x');
+      insert into ccdb_paths values (102, 'y');
+      insert into ccdb_contenttype values (100, 'x');
+      insert into ccdb_contenttype values (102, 'y');
+      insert into ccdb_metadata values (100, 'x');
+      insert into ccdb_metadata values (102, 'y');
+      " ccdb postgres
+  tags: test 
+
+- hosts: ccdb_online
+  gather_facts: no
+  tasks:
+  - name: "Insert rows to db - exceptions"
+    shell: |
+      /usr/local/pgsql/bin/psql -h localhost -p 5433 -c "
+      insert into ccdb_paths values (100, 'x');
+      insert into ccdb_paths values (102, 'y');
+      insert into ccdb_contenttype values (100, 'x');
+      insert into ccdb_contenttype values (102, 'y');
+      insert into ccdb_metadata values (100, 'x');
+      insert into ccdb_metadata values (102, 'y');
+      " ccdb postgres
+  tags: test 
+
+- hosts: ccdb_offline
+  gather_facts: no
+  tasks:
+  - name: "Turn on bucardo"
+    shell: /home/postgres/bucardo/bucardo resume all && sleep 10
+  - name: "Check bucardo status"
+    shell: /home/postgres/bucardo/bucardo status | grep -q Good
+  tags: test 
+
+- hosts: all
+  gather_facts: no
+  tasks:
+  - name: "Clean up after test"
+    shell: |
+      /usr/local/pgsql/bin/psql -h localhost -p 5433 -c "
+        delete from ccdb_paths where path = 'x' or path = 'y';
+      " ccdb postgres
+  tags: cleanup 
