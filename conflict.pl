@@ -5,7 +5,6 @@ use Set::Scalar;
 use DBUtils;
 
 my $info = shift;
-my $file = '/tmp/conflict.txt';
 my $dbh_offline = $info->{dbh}->{ccdb_offline};
 my $dbh_online = $info->{dbh}->{ccdb_online};
 my @conflicts = keys(%{$info->{conflicts}});

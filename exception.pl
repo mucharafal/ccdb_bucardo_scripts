@@ -1,6 +1,5 @@
 use strict;
 use warnings;
-use Data::Dumper;
 use DBUtils;
 
 my $info = shift;
