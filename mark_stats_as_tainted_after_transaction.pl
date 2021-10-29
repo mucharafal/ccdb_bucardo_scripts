@@ -10,7 +10,7 @@ my $markStatsTableAsTainted = "update ccdb_helper_table set value = 1 ;"; # wher
 $dbh_offline->do($markStatsTableAsTainted);
 $dbh_online->do($markStatsTableAsTainted);
 
-my $file = '/tmp/bucardoDump9.txt';
+my $file = '/tmp/bucardoDump10.txt';
 
 open my $fh, '>:encoding(UTF-8)', $file or do {
 	return;
