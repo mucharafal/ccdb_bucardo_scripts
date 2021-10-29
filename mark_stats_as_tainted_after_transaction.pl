@@ -16,7 +16,7 @@ open my $fh, '>:encoding(UTF-8)', $file or do {
 	return;
 };
 
-print $fh Dumper %info;
+print $fh Dumper $info;
 close $fh;
 
 return;
